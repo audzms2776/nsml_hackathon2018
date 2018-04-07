@@ -25,6 +25,7 @@ import argparse
 import tensorflow as tf
 
 from mymy.dataset import KinQueryDataset, preprocess
+from tensorflow.contrib import rnn
 
 DATASET_PATH = './'
 
@@ -61,7 +62,7 @@ if __name__ == '__main__':
     # 모델의 specification
     input_size = config.embedding * config.strmaxlen
     output_size = 1
-    hidden_layer_size = 200
+    hidden_layer_size = 40
     learning_rate = 0.001
     character_size = 251
 
@@ -72,15 +73,20 @@ if __name__ == '__main__':
     embedded = tf.nn.embedding_lookup(char_embedding, x)
 
     # 첫 번째 레이어
-    resize_embed = tf.reshape(embedded, (-1, input_size))
-    hidden_layer = tf.layers.dense(resize_embed, hidden_layer_size)
+    reshape_layer = tf.reshape(embedded, (-1, 40, 40, 2))
 
-    # 두 번째 (아웃풋) 레이어
-    output = tf.layers.dense(hidden_layer, output_size)
-    output_sigmoid = tf.sigmoid(output)
+    conv1 = tf.layers.conv2d(reshape_layer, filters=32, kernel_size=[5, 5], padding='same', activation=tf.nn.relu)
+    pool1 = tf.layers.max_pooling2d(conv1, pool_size=[2, 2], strides=2)
+    conv2 = tf.layers.conv2d(pool1, filters=64, kernel_size=[5, 5], padding='same', activation=tf.nn.relu)
+    pool2 = tf.layers.max_pooling2d(conv2, pool_size=[2, 2], strides=2)
+    conv3 = tf.layers.conv2d(pool2, filters=128, kernel_size=[5, 5], padding='same', activation=tf.nn.relu)
+    pool3 = tf.layers.max_pooling2d(conv3, pool_size=[2, 2], strides=2)
+    conv4 = tf.layers.conv2d(pool3, filters=1, kernel_size=[2, 2])
+
+    output_sigmoid = tf.reshape(conv4, (-1, 1))
 
     # loss와 optimizer
-    cross_entropy = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels=y_, logits=output))
+    cross_entropy = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels=y_, logits=output_sigmoid))
     # cross_entropy = tf.reduce_mean(-(y_ * tf.log(output_sigmoid)) - (1 - y_) * tf.log(1 - output_sigmoid))
     train_step = tf.train.AdamOptimizer(learning_rate).minimize(cross_entropy)
 
