@@ -69,30 +69,9 @@ class Regression(nn.Module):
 
         # 임베딩
         self.embeddings = nn.Embedding(self.character_size, self.embedding_dim)
-
-        self.conv1 = nn.Sequential(
-            nn.Conv2d(1, 16, kernel_size=5, padding=2),
-            nn.BatchNorm2d(16),
-            nn.ReLU(),
-            nn.MaxPool2d(2)
-        )
-
-        self.conv2 = nn.Sequential(
-            nn.Conv2d(16, 64, kernel_size=5, padding=2),
-            nn.BatchNorm2d(64),
-            nn.ReLU(),
-            nn.MaxPool2d(2)
-        )
-
-        self.conv3 = nn.Sequential(
-            nn.Conv2d(64, 128, kernel_size=5, padding=2),
-            nn.BatchNorm2d(128),
-            nn.ReLU(),
-            nn.MaxPool2d(2)
-        )
-
-        self.fcc1 = nn.Linear(3200, 100)
-        self.fcc2 = nn.Linear(100, 1)
+        self.lstm = nn.LSTM(self.max_length, 200, self.embedding_dim, batch_first=True)
+        self.fc1 = nn.Linear(200, 100)
+        self.fc2 = nn.Linear(100, 1)
 
     def forward(self, data: list):
         """
@@ -110,17 +89,16 @@ class Regression(nn.Module):
 
         # 뉴럴네트워크를 지나 결과를 출력합니다.
         embeds = self.embeddings(data_in_torch)
-        out = embeds.view((batch_size, 1, 40, 40))
+        out = embeds.view((batch_size, self.embedding_dim, 200))
+        h0 = Variable(torch.zeros(self.embedding_dim, batch_size, 200).type(torch.cuda.FloatTensor))
+        c0 = Variable(torch.zeros(self.embedding_dim, batch_size, 200).type(torch.cuda.FloatTensor))
+        out, _ = self.lstm(out, (h0, c0))
 
-        out = self.conv1(out)
-        out = self.conv2(out)
-        out = self.conv3(out)
+        re_out = out[:, -1, :]
+        hidden = torch.sigmoid(self.fc1(re_out))
+        hidden = torch.sigmoid(self.fc2(hidden))
+        output = hidden * 9 + 1
 
-        out = out.view(out.size(0), -1)
-        out = torch.sigmoid(self.fcc1(out))
-        out = torch.sigmoid(self.fcc2(out))
-
-        output = out * 9 + 1
         return output
 
 
@@ -149,7 +127,6 @@ if __name__ == '__main__':
     criterion = nn.MSELoss()
     optimizer = optim.Adam(model.parameters(), lr=0.01)
 
-    # 학습 모드일 때 사용합니다. (기본값)
     if config.mode == 'train':
         # 데이터를 로드합니다.
         dataset = MovieReviewDataset(DATASET_PATH, config.strmaxlen)
