@@ -24,7 +24,7 @@ import os
 
 import numpy as np
 
-from mymy.kor_char_parser import decompose_str_as_one_hot
+from mymy_kin.kor_char_parser import decompose_str_as_one_hot
 
 
 class KinQueryDataset:

@@ -24,7 +24,7 @@ import argparse
 
 import tensorflow as tf
 
-from mymy.dataset import KinQueryDataset, preprocess
+from mymy_kin.dataset import KinQueryDataset, preprocess
 from tensorflow.contrib import rnn
 
 DATASET_PATH = './'
@@ -52,7 +52,7 @@ if __name__ == '__main__':
 
     # User options
     args.add_argument('--output', type=int, default=1)
-    args.add_argument('--epochs', type=int, default=200)
+    args.add_argument('--epochs', type=int, default=500)
     args.add_argument('--batch', type=int, default=2000)
     args.add_argument('--strmaxlen', type=int, default=400)
     args.add_argument('--embedding', type=int, default=8)
@@ -73,7 +73,11 @@ if __name__ == '__main__':
     embedded = tf.nn.embedding_lookup(char_embedding, x)
 
     # 첫 번째 레이어
-    reshape_layer = tf.reshape(embedded, (-1, 40, 40, 2))
+    cell = rnn.BasicLSTMCell(num_units=16, activation=tf.nn.tanh, state_is_tuple=True)
+    output, _states = tf.nn.dynamic_rnn(cell, embedded, dtype=tf.float32)
+    flat_layer = tf.contrib.layers.flatten(output)
+
+    reshape_layer = tf.reshape(flat_layer, [-1, 20, 20, 16])
 
     conv1 = tf.layers.conv2d(reshape_layer, filters=32, kernel_size=[5, 5], padding='same', activation=tf.nn.relu)
     pool1 = tf.layers.max_pooling2d(conv1, pool_size=[2, 2], strides=2)
