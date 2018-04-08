@@ -21,7 +21,6 @@ OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 """
 
 import argparse
-import os
 
 import numpy as np
 import torch
@@ -30,7 +29,7 @@ from torch.autograd import Variable
 from torch import nn, optim
 from torch.utils.data import DataLoader
 
-from my_movie_review.dataset import MovieReviewDataset, preprocess
+from my_movie_review.dataset import MovieReviewDataset
 
 
 def collate_fn(data: list):
@@ -71,13 +70,29 @@ class Regression(nn.Module):
         # 임베딩
         self.embeddings = nn.Embedding(self.character_size, self.embedding_dim)
 
-        # 첫 번째 레이어
-        self.fc1 = nn.Linear(self.max_length * self.embedding_dim, 200)
+        self.conv1 = nn.Sequential(
+            nn.Conv2d(1, 16, kernel_size=5, padding=2),
+            nn.BatchNorm2d(16),
+            nn.ReLU(),
+            nn.MaxPool2d(2)
+        )
 
-        # 두 번째 (아웃풋) 레이어
-        self.fc2 = nn.Linear(200, 100)
+        self.conv2 = nn.Sequential(
+            nn.Conv2d(16, 64, kernel_size=5, padding=2),
+            nn.BatchNorm2d(64),
+            nn.ReLU(),
+            nn.MaxPool2d(2)
+        )
 
-        self.fc3 = nn.Linear(100, 1)
+        self.conv3 = nn.Sequential(
+            nn.Conv2d(64, 128, kernel_size=5, padding=2),
+            nn.BatchNorm2d(128),
+            nn.ReLU(),
+            nn.MaxPool2d(2)
+        )
+
+        self.fcc1 = nn.Linear(3200, 100)
+        self.fcc2 = nn.Linear(100, 1)
 
     def forward(self, data: list):
         """
@@ -95,11 +110,17 @@ class Regression(nn.Module):
 
         # 뉴럴네트워크를 지나 결과를 출력합니다.
         embeds = self.embeddings(data_in_torch)
-        hidden = self.fc1(embeds.view(batch_size, -1))
-        hidden2 = torch.sigmoid(self.fc2(hidden))
-        hidden3 = torch.sigmoid(self.fc3(hidden2))
-        # 영화 리뷰가 1~10점이기 때문에, 스케일을 맞춰줍니다
-        output = hidden3 * 9 + 1
+        out = embeds.view((batch_size, 1, 40, 40))
+
+        out = self.conv1(out)
+        out = self.conv2(out)
+        out = self.conv3(out)
+
+        out = out.view(out.size(0), -1)
+        out = torch.sigmoid(self.fcc1(out))
+        out = torch.sigmoid(self.fcc2(out))
+
+        output = out * 9 + 1
         return output
 
 
