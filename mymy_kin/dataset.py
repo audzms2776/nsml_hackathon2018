@@ -47,7 +47,7 @@ class KinQueryDataset:
             self.queries = preprocess(f.readlines(), max_length)
         # 지식인 레이블을 읽고 preprocess까지 진행합니다.
         with open(labels_path) as f:
-            self.labels = np.array([[np.float32(x)] for x in f.readlines()])
+            self.labels = np.array([np.int32(x) for x in f.readlines()])
 
     def __len__(self):
         """

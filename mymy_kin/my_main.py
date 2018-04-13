@@ -19,6 +19,7 @@ HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTIO
 CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE
 OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 """
+# Densely Connected Bidirectional LSTM with Applications to Sentence Classification
 
 import argparse
 
@@ -61,37 +62,69 @@ if __name__ == '__main__':
 
     # 모델의 specification
     input_size = config.embedding * config.strmaxlen
-    output_size = 1
-    hidden_layer_size = 40
     learning_rate = 0.001
     character_size = 251
 
     x = tf.placeholder(tf.int32, [None, config.strmaxlen])
-    y_ = tf.placeholder(tf.float32, [None, output_size])
+    y_ = tf.placeholder(tf.int32, [None])
     # 임베딩
     char_embedding = tf.get_variable('char_embedding', [character_size, config.embedding])
     embedded = tf.nn.embedding_lookup(char_embedding, x)
 
-    # 첫 번째 레이어
-    cell = rnn.BasicLSTMCell(num_units=16, activation=tf.nn.tanh, state_is_tuple=True)
-    output, _states = tf.nn.dynamic_rnn(cell, embedded, dtype=tf.float32)
-    flat_layer = tf.contrib.layers.flatten(output)
+    # layer1
+    with tf.variable_scope('layer1'):
+        fw_lstm1 = rnn.BasicLSTMCell(num_units=8, activation=tf.nn.tanh, state_is_tuple=True)
+        bw_lstm1 = rnn.BasicLSTMCell(num_units=8, activation=tf.nn.tanh, state_is_tuple=True)
 
-    reshape_layer = tf.reshape(flat_layer, [-1, 20, 20, 16])
+        output, _ = tf.nn.bidirectional_dynamic_rnn(fw_lstm1, bw_lstm1, embedded, dtype=tf.float32)
 
-    conv1 = tf.layers.conv2d(reshape_layer, filters=32, kernel_size=[5, 5], padding='same', activation=tf.nn.relu)
-    pool1 = tf.layers.max_pooling2d(conv1, pool_size=[2, 2], strides=2)
-    conv2 = tf.layers.conv2d(pool1, filters=64, kernel_size=[5, 5], padding='same', activation=tf.nn.relu)
-    pool2 = tf.layers.max_pooling2d(conv2, pool_size=[2, 2], strides=2)
-    conv3 = tf.layers.conv2d(pool2, filters=128, kernel_size=[5, 5], padding='same', activation=tf.nn.relu)
-    pool3 = tf.layers.max_pooling2d(conv3, pool_size=[2, 2], strides=2)
-    conv4 = tf.layers.conv2d(pool3, filters=1, kernel_size=[2, 2])
+        fw_out1 = output[0]
+        bw_out1 = output[1]
 
-    output_sigmoid = tf.reshape(conv4, (-1, 1))
+    # layer2
+    with tf.variable_scope('layer2'):
+        h2 = tf.concat([embedded, fw_out1, bw_out1], axis=1)
 
-    # loss와 optimizer
-    cross_entropy = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels=y_, logits=output_sigmoid))
-    # cross_entropy = tf.reduce_mean(-(y_ * tf.log(output_sigmoid)) - (1 - y_) * tf.log(1 - output_sigmoid))
+        fw_lstm2 = rnn.BasicLSTMCell(num_units=8, activation=tf.nn.tanh, state_is_tuple=True)
+        bw_lstm2 = rnn.BasicLSTMCell(num_units=8, activation=tf.nn.tanh, state_is_tuple=True)
+
+        output2, _ = tf.nn.bidirectional_dynamic_rnn(fw_lstm2, bw_lstm2, h2, dtype=tf.float32)
+
+        fw_out2 = output2[0]
+        bw_out2 = output2[1]
+
+    # layer3
+    with tf.variable_scope('layer3'):
+        h3 = tf.concat([embedded, fw_out1, bw_out1, fw_out2, bw_out2], axis=1)
+
+        fw_lstm3 = rnn.BasicLSTMCell(num_units=8, activation=tf.nn.tanh, state_is_tuple=True)
+        bw_lstm3 = rnn.BasicLSTMCell(num_units=8, activation=tf.nn.tanh, state_is_tuple=True)
+
+        output3, _ = tf.nn.bidirectional_dynamic_rnn(fw_lstm3, bw_lstm3, h3, dtype=tf.float32)
+
+        fw_out3 = output3[0]
+        bw_out3 = output3[1]
+
+    # average-pooling
+    with tf.variable_scope('average-pooling'):
+        fw_pool = tf.layers.average_pooling1d(fw_out3, 2, 2)
+        bw_pool = tf.layers.average_pooling1d(bw_out3, 2, 2)
+
+    # flatten
+    with tf.variable_scope('flatten'):
+        h_ = tf.concat([fw_pool, bw_pool], axis=1)
+
+        flat_layer = tf.contrib.layers.flatten(h_)
+
+        output = tf.layers.dense(flat_layer, 2)
+
+    # softmax
+    with tf.variable_scope('softmax'):
+        cross_entropy = tf.reduce_mean(
+            tf.nn.sparse_softmax_cross_entropy_with_logits(labels=y_, logits=output))
+        probabilities = tf.nn.softmax(output)
+        max_idx = tf.argmax(probabilities, 1)
+
     train_step = tf.train.AdamOptimizer(learning_rate).minimize(cross_entropy)
 
     sess = tf.InteractiveSession()
@@ -112,4 +145,5 @@ if __name__ == '__main__':
             print('Batch : ', i + 1, '/', one_batch_size,
                   ', BCE in this minibatch: ', float(loss))
             avg_loss += float(loss)
+
         print('epoch:', epoch, ' train_loss:', float(avg_loss / one_batch_size))
