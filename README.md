@@ -15,4 +15,7 @@ LSTMCell과 cnn을 사용하였습니다.
 tensorflow 사용 <br />
 Densely Connected Bidirectional LSTM with Applications to Sentence Classification (https://arxiv.org/pdf/1802.00889.pdf) <br/>
 네트워크를 구현하였습니다. <br/>
+### 이미지
+![dcbilstm image](https://github.com/audzms2776/nsml_hackathon2018/blob/master/dcbilstm.PNG "https://arxiv.org/pdf/1802.00889.pdf")
+
 히든 레이어에서 네트워크 연산 시간이 오래 걸려서 DCBiLSTM layer를 1층만 연결하고 1D average-pooling을 하여 사용하였습니다. 
