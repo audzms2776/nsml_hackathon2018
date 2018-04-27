@@ -25,6 +25,8 @@ import os
 import numpy as np
 
 from mymy_kin.kor_char_parser import decompose_str_as_one_hot
+import konlpy
+import nltk
 
 
 class KinQueryDataset:
@@ -47,7 +49,7 @@ class KinQueryDataset:
             self.queries = preprocess(f.readlines(), max_length)
         # 지식인 레이블을 읽고 preprocess까지 진행합니다.
         with open(labels_path) as f:
-            self.labels = np.array([np.int32(x) for x in f.readlines()])
+            self.labels = np.array([[np.float32(x)] for x in f.readlines()])
 
     def __len__(self):
         """
@@ -65,6 +67,47 @@ class KinQueryDataset:
         return self.queries[idx], self.labels[idx]
 
 
+def word_parse(s):
+    words = konlpy.tag.Twitter().pos(s)
+    grammar = """
+        NP: {<N.*>*<Suffix>?}   # Noun phrase
+        VP: {<V.*>*}            # Verb phrase
+        AP: {<A.*>*}            # Adjective phrase
+        """
+    parser = nltk.RegexpParser(grammar)
+    chunks = parser.parse(words)
+
+    word_arr = []
+
+    for cc in chunks:
+        temp = str(cc)
+        temp_type_str = temp[1:3]
+        temp_type = ['NP', 'VP', 'AP']
+
+        if temp_type_str in temp_type:
+            temp = temp[4:]
+            split_arr = temp.split(' ')
+            for sp in split_arr:
+                main_word = sp.split('/')[0]
+
+                word_arr.append(main_word)
+        else:
+            temp = temp[1:]
+            split_arr = temp.replace('\'', '').split(',')
+            main_word = split_arr[0]
+
+            word_arr.append(main_word)
+
+    uq_arr = []
+    for idx, t in enumerate(word_arr):
+        if word_arr.count(t) == 1:
+            uq_arr.append(t)
+
+    uq_word = ''.join(uq_arr)
+
+    return uq_word
+
+
 def preprocess(data: list, max_length: int):
     """
      입력을 받아서 딥러닝 모델이 학습 가능한 포맷으로 변경하는 함수입니다.
@@ -75,7 +118,7 @@ def preprocess(data: list, max_length: int):
     :param max_length: 문자열의 최대 길이
     :return: 벡터 리스트 ([[0, 1, 5, 6], [5, 4, 10, 200], ...]) max_length가 4일 때
     """
-    vectorized_data = [decompose_str_as_one_hot(datum, warning=False) for datum in data]
+    vectorized_data = [decompose_str_as_one_hot(word_parse(datum), warning=False) for datum in data]
     zero_padding = np.zeros((len(data), max_length), dtype=np.int32)
     for idx, seq in enumerate(vectorized_data):
         length = len(seq)

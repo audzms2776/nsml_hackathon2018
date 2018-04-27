@@ -1,4 +1,3 @@
-
 """
 Copyright 2018 NAVER Corp.
 
@@ -19,12 +18,13 @@ CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFT
 OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 """
 
-
+# nsml: syschat0/tensorflow_gpu_konlpy
 from distutils.core import setup
+
 setup(
     name='nsml LSTM kin query',
     version='1.0',
     description='',
-    install_requires =[
+    install_requires=[
     ]
 )
