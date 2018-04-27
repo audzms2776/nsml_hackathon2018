@@ -54,7 +54,7 @@ if __name__ == '__main__':
     # User options
     args.add_argument('--output', type=int, default=1)
     args.add_argument('--epochs', type=int, default=500)
-    args.add_argument('--batch', type=int, default=2000)
+    args.add_argument('--batch', type=int, default=64)
     args.add_argument('--strmaxlen', type=int, default=400)
     args.add_argument('--embedding', type=int, default=8)
     args.add_argument('--threshold', type=float, default=0.5)
@@ -66,65 +66,37 @@ if __name__ == '__main__':
     character_size = 251
 
     x = tf.placeholder(tf.int32, [None, config.strmaxlen])
-    y_ = tf.placeholder(tf.int32, [None])
+    y_ = tf.placeholder(tf.float32, [None, 1])
     # 임베딩
     char_embedding = tf.get_variable('char_embedding', [character_size, config.embedding])
     embedded = tf.nn.embedding_lookup(char_embedding, x)
 
-    # layer1
-    with tf.variable_scope('layer1'):
-        fw_lstm1 = rnn.BasicLSTMCell(num_units=8, activation=tf.nn.tanh, state_is_tuple=True)
-        bw_lstm1 = rnn.BasicLSTMCell(num_units=8, activation=tf.nn.tanh, state_is_tuple=True)
+    conv_input = tf.reshape(embedded, (-1, 40, 40, 2))
 
-        output, _ = tf.nn.bidirectional_dynamic_rnn(fw_lstm1, bw_lstm1, embedded, dtype=tf.float32)
+    #### conv
+    conv1 = tf.layers.conv2d(
+        inputs=conv_input, filters=32, kernel_size=[2, 2],
+        padding="same", activation=tf.nn.relu)
+    pool1 = tf.layers.max_pooling2d(inputs=conv1, pool_size=[2, 2], strides=2, padding='valid')
 
-        fw_out1 = output[0]
-        bw_out1 = output[1]
+    # conv2 = tf.layers.conv2d(
+    #     inputs=pool1, filters=128, kernel_size=[2, 2],
+    #     padding="same", activation=tf.nn.relu)
+    # pool2 = tf.layers.max_pooling2d(inputs=conv2, pool_size=[2, 2], strides=2, padding='valid')
+    #
+    # conv3 = tf.layers.conv2d(
+    #     inputs=pool2, filters=512, kernel_size=[2, 2],
+    #     padding="same", activation=tf.nn.relu)
+    # pool3 = tf.layers.max_pooling2d(inputs=conv3, pool_size=[2, 2], strides=2, padding='valid')
 
-    # layer2
-    with tf.variable_scope('layer2'):
-        h2 = tf.concat([embedded, fw_out1, bw_out1], axis=1)
+    flatten_layer = tf.contrib.layers.flatten(pool1)
 
-        fw_lstm2 = rnn.BasicLSTMCell(num_units=8, activation=tf.nn.tanh, state_is_tuple=True)
-        bw_lstm2 = rnn.BasicLSTMCell(num_units=8, activation=tf.nn.tanh, state_is_tuple=True)
+    layer1 = tf.layers.dense(flatten_layer, 30, activation=tf.nn.relu)
+    output = tf.layers.dense(layer1, 1)
 
-        output2, _ = tf.nn.bidirectional_dynamic_rnn(fw_lstm2, bw_lstm2, h2, dtype=tf.float32)
+    sigmoid_output = tf.nn.sigmoid(output)
 
-        fw_out2 = output2[0]
-        bw_out2 = output2[1]
-
-    # layer3
-    with tf.variable_scope('layer3'):
-        h3 = tf.concat([embedded, fw_out1, bw_out1, fw_out2, bw_out2], axis=1)
-
-        fw_lstm3 = rnn.BasicLSTMCell(num_units=8, activation=tf.nn.tanh, state_is_tuple=True)
-        bw_lstm3 = rnn.BasicLSTMCell(num_units=8, activation=tf.nn.tanh, state_is_tuple=True)
-
-        output3, _ = tf.nn.bidirectional_dynamic_rnn(fw_lstm3, bw_lstm3, h3, dtype=tf.float32)
-
-        fw_out3 = output3[0]
-        bw_out3 = output3[1]
-
-    # average-pooling
-    with tf.variable_scope('average-pooling'):
-        fw_pool = tf.layers.average_pooling1d(fw_out3, 2, 2)
-        bw_pool = tf.layers.average_pooling1d(bw_out3, 2, 2)
-
-    # flatten
-    with tf.variable_scope('flatten'):
-        h_ = tf.concat([fw_pool, bw_pool], axis=1)
-
-        flat_layer = tf.contrib.layers.flatten(h_)
-
-        output = tf.layers.dense(flat_layer, 2)
-
-    # softmax
-    with tf.variable_scope('softmax'):
-        cross_entropy = tf.reduce_mean(
-            tf.nn.sparse_softmax_cross_entropy_with_logits(labels=y_, logits=output))
-        probabilities = tf.nn.softmax(output)
-        max_idx = tf.argmax(probabilities, 1)
-
+    cross_entropy = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=output, labels=y_))
     train_step = tf.train.AdamOptimizer(learning_rate).minimize(cross_entropy)
 
     sess = tf.InteractiveSession()
@@ -139,11 +111,13 @@ if __name__ == '__main__':
     # epoch마다 학습을 수행합니다.
     for epoch in range(config.epochs):
         avg_loss = 0.0
+
         for i, (data, labels) in enumerate(_batch_loader(dataset, config.batch)):
             _, loss = sess.run([train_step, cross_entropy],
                                feed_dict={x: data, y_: labels})
             print('Batch : ', i + 1, '/', one_batch_size,
-                  ', BCE in this minibatch: ', float(loss))
+                  ', ERROR : ', float(loss))
+
             avg_loss += float(loss)
 
         print('epoch:', epoch, ' train_loss:', float(avg_loss / one_batch_size))
