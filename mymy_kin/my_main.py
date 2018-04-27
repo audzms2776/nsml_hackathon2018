@@ -71,28 +71,31 @@ if __name__ == '__main__':
     char_embedding = tf.get_variable('char_embedding', [character_size, config.embedding])
     embedded = tf.nn.embedding_lookup(char_embedding, x)
 
-    conv_input = tf.reshape(embedded, (-1, 40, 40, 2))
+    with tf.variable_scope('layer1'):
+        fw_lstm1 = rnn.BasicLSTMCell(num_units=8, activation=tf.nn.tanh, state_is_tuple=True)
+        bw_lstm1 = rnn.BasicLSTMCell(num_units=8, activation=tf.nn.tanh, state_is_tuple=True)
 
-    #### conv
-    conv1 = tf.layers.conv2d(
-        inputs=conv_input, filters=32, kernel_size=[2, 2],
-        padding="same", activation=tf.nn.relu)
-    pool1 = tf.layers.max_pooling2d(inputs=conv1, pool_size=[2, 2], strides=2, padding='valid')
+        output, _ = tf.nn.bidirectional_dynamic_rnn(fw_lstm1, bw_lstm1, embedded, dtype=tf.float32)
 
-    # conv2 = tf.layers.conv2d(
-    #     inputs=pool1, filters=128, kernel_size=[2, 2],
-    #     padding="same", activation=tf.nn.relu)
-    # pool2 = tf.layers.max_pooling2d(inputs=conv2, pool_size=[2, 2], strides=2, padding='valid')
-    #
-    # conv3 = tf.layers.conv2d(
-    #     inputs=pool2, filters=512, kernel_size=[2, 2],
-    #     padding="same", activation=tf.nn.relu)
-    # pool3 = tf.layers.max_pooling2d(inputs=conv3, pool_size=[2, 2], strides=2, padding='valid')
+        fw_out1 = output[0]
+        bw_out1 = output[1]
 
-    flatten_layer = tf.contrib.layers.flatten(pool1)
+    with tf.variable_scope('layer2'):
+        h2 = tf.concat([embedded, fw_out1, bw_out1], axis=1)
+        fw_lstm2 = rnn.BasicLSTMCell(num_units=8, activation=tf.nn.tanh, state_is_tuple=True)
+        bw_lstm2 = rnn.BasicLSTMCell(num_units=8, activation=tf.nn.tanh, state_is_tuple=True)
 
-    layer1 = tf.layers.dense(flatten_layer, 30, activation=tf.nn.relu)
-    output = tf.layers.dense(layer1, 1)
+        output2, _ = tf.nn.bidirectional_dynamic_rnn(fw_lstm2, bw_lstm2, h2, dtype=tf.float32)
+
+        fw_out2 = output2[0]
+        bw_out2 = output2[1]
+
+    # flatten
+    with tf.variable_scope('flatten'):
+        h_ = tf.concat([fw_out2, bw_out2], axis=1)
+
+        flat_layer = tf.contrib.layers.flatten(h_)
+        output = tf.layers.dense(flat_layer, 1)
 
     sigmoid_output = tf.nn.sigmoid(output)
 
