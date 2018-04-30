@@ -90,9 +90,24 @@ if __name__ == '__main__':
         fw_out2 = output2[0]
         bw_out2 = output2[1]
 
+    with tf.variable_scope('layer3'):
+        h3 = tf.concat([embedded, fw_out1, bw_out1], axis=1)
+        fw_lstm3 = rnn.BasicLSTMCell(num_units=8, activation=tf.nn.tanh, state_is_tuple=True)
+        bw_lstm3 = rnn.BasicLSTMCell(num_units=8, activation=tf.nn.tanh, state_is_tuple=True)
+
+        output3, _ = tf.nn.bidirectional_dynamic_rnn(fw_lstm3, bw_lstm3, h3, dtype=tf.float32)
+
+        fw_out3 = output3[0]
+        bw_out3 = output3[1]
+
+    # average-pooling
+    with tf.variable_scope('average-pooling'):
+        fw_pool = tf.layers.average_pooling1d(fw_out3, 2, 2, data_format='channels_first')
+        bw_pool = tf.layers.average_pooling1d(bw_out3, 2, 2, data_format='channels_first')
+
     # flatten
     with tf.variable_scope('flatten'):
-        h_ = tf.concat([fw_out2, bw_out2], axis=1)
+        h_ = tf.concat([fw_pool, bw_pool], axis=1)
 
         flat_layer = tf.contrib.layers.flatten(h_)
         output = tf.layers.dense(flat_layer, 1)
