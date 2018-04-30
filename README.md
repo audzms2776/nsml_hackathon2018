@@ -18,4 +18,6 @@ Densely Connected Bidirectional LSTM with Applications to Sentence Classificatio
 ### 이미지
 ![dcbilstm image](https://github.com/audzms2776/nsml_hackathon2018/blob/master/dcbilstm.PNG "https://arxiv.org/pdf/1802.00889.pdf")
 
-히든 레이어에서 네트워크 연산 시간이 오래 걸려서 DCBiLSTM layer를 1층만 연결하고 1D average-pooling을 하여 사용하였습니다. 
+konlpy를 이용하여 문장에서 명사, 동사 중에서 같은 단어를 제거하였습니다. <br/>
+문장의 길이를 더 짧게하여 학습하였습니다. <br/>
+같은 네트워크 모델을 사용하였을 때보다 성능 향상이 있었습니다. <br/>
